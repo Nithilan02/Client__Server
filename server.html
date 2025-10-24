@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server - Communication System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            width: 100%;
+            max-width: 900px;
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .status {
+            font-size: 13px;
+            opacity: 0.95;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .chat-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.sent {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 18px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .message.received .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+        }
+
+        .message.sent .message-content {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.system .message-content {
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 12px;
+            text-align: center;
+            max-width: 100%;
+            font-size: 13px;
+        }
+
+        .message.system {
+            justify-content: center;
+        }
+
+        .message-label {
+            font-size: 11px;
+            margin-bottom: 4px;
+            opacity: 0.7;
+            font-weight: 600;
+        }
+
+        .message.received .message-label {
+            color: #2a5298;
+        }
+
+        .message.sent .message-label {
+            color: #1e3c72;
+            text-align: right;
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 10px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 2px solid #e5e7eb;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        .input-area input:focus {
+            border-color: #2a5298;
+            box-shadow: 0 0 0 3px rgba(42, 82, 152, 0.1);
+        }
+
+        .input-area button {
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .input-area button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(42, 82, 152, 0.4);
+        }
+
+        .input-area button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖥️ SERVER</h1>
+            <div class="status">
+                <span class="status-dot offline" id="statusDot"></span>
+                <span id="statusText">Waiting for client...</span>
+            </div>
+        </div>
+        
+        <div class="chat-area" id="chatArea"></div>
+        
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Type your message..." disabled />
+            <button onclick="sendMessage()" id="sendBtn" disabled>Send</button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const chatArea = document.getElementById('chatArea');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+
+        let clientConnected = false;
+
+        socket.emit('join', 'server');
+
+        socket.on('role-assigned', (role) => {
+            addSystemMessage('You are connected as SERVER');
+        });
+
+        socket.on('peer-status', (status) => {
+            addSystemMessage(status);
+            
+            if (status.includes('online')) {
+                clientConnected = true;
+                statusDot.classList.remove('offline');
+                statusText.textContent = 'Client connected';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+            } else {
+                clientConnected = false;
+                statusDot.classList.add('offline');
+                statusText.textContent = 'Client disconnected';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+            }
+        });
+
+        socket.on('receive-message', (data) => {
+            addMessage(data.message, 'received');
+        });
+
+        function addMessage(text, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const label = type === 'sent' ? 'YOU (SERVER)' : 'CLIENT';
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            messageDiv.innerHTML = `
+                <div>
+                    <div class="message-label">${label} • ${time}</div>
+                    <div class="message-content">${text}</div>
+                </div>
+            `;
+            
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function addSystemMessage(text) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message system';
+            messageDiv.innerHTML = `<div class="message-content">${text}</div>`;
+            chatArea.appendChild(messageDiv);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message === '' || !clientConnected) return;
+            
+            socket.emit('send-message', { message, from: 'server' });
+            addMessage(message, 'sent');
+            messageInput.value = '';
+        }
+
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
